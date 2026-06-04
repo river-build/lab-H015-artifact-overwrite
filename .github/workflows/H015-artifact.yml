@@ -1,0 +1,33 @@
+# LAB VICTIM (H015) — artifact overwrite/poisoning. The build job checks out the PR
+# head and uploads ./app (attacker-controlled). A later job downloads that artifact
+# by name and EXECUTES it with the secret in env. Attacker content reaches a
+# privileged consumer.
+name: Build And Deploy
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}   # attacker tree
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    env:
+      LAB_SECRET: ${{ secrets.LAB_SECRET }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app
+          path: app                 # extract back under app/ (upload strips the prefix)
+      - run: bash app/run.sh        # runs the attacker-supplied artifact content
